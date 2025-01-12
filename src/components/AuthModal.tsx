@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { Modal } from './ui/Modal';
 import { supabase } from '../lib/supabase';
-import { Lock, Phone, Mail, ArrowRight } from 'lucide-react';
+import { Lock, Phone, Mail, ArrowRight, User } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type AuthStep = 'method' | 'phone' | 'otp' | 'email';
+type AuthStep = 'method' | 'phone' | 'otp' | 'email' | 'profile';
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [phone, setPhone] = useState('');
@@ -19,6 +19,12 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  
+  // Profile form state
+  const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +58,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     try {
       const formattedPhone = phone.startsWith('+') ? phone : `+${phone}`;
-      const { error } = await supabase.auth.verifyOtp({
+      const { error, data: { user } } = await supabase.auth.verifyOtp({
         phone: formattedPhone,
         token: otp,
         type: 'sms'
@@ -63,8 +69,21 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         return;
       }
 
-      onClose();
-      window.location.reload();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!profile) {
+          setCurrentUser(user);
+          setStep('profile');
+        } else {
+          onClose();
+          window.location.reload();
+        }
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -75,21 +94,107 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password
         });
-        if (error) throw error;
+
+        if (error) {
+          if (error.message === 'User already registered') {
+            setError('This email is already registered. Please sign in instead.');
+          } else {
+            setError(error.message);
+          }
+          return;
+        }
+        
+        if (data?.user) {
+          setCurrentUser(data.user);
+          setStep('profile');
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
           password,
         });
-        if (error) throw error;
+
+        if (error) {
+          if (error.message === 'Invalid login credentials') {
+            setError('Incorrect email or password. Please try again.');
+          } else {
+            setError(error.message);
+          }
+          return;
+        }
+
+        if (data.user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .maybeSingle();
+
+          if (!profile) {
+            setCurrentUser(data.user);
+            setStep('profile');
+          } else {
+            onClose();
+            window.location.reload();
+          }
+        }
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    if (!username || !firstName || !lastName) {
+      setError('All fields are required');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .insert({
+          id: currentUser.id,
+          username,
+          first_name: firstName,
+          last_name: lastName,
+          email: currentUser.email
+        });
+
+      if (error) {
+        if (error.message.includes('username')) {
+          setError('This username is already taken');
+        } else {
+          setError(error.message);
+        }
+        return;
       }
 
       onClose();
@@ -105,17 +210,26 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     <Modal isOpen={isOpen} onClose={onClose}>
       <div className="p-6">
         <div className="flex items-center space-x-2 mb-6">
-          <Lock className="w-6 h-6 text-orange-500" />
+          {step === 'profile' ? (
+            <User className="w-6 h-6 text-orange-500" />
+          ) : (
+            <Lock className="w-6 h-6 text-orange-500" />
+          )}
           <h2 className="text-2xl font-bold text-gray-800">
             {step === 'method' ? 'Sign In' :
              step === 'phone' ? 'Sign In with Phone' :
              step === 'otp' ? 'Enter Verification Code' :
+             step === 'profile' ? 'Complete Your Profile' :
              isSignUp ? 'Create Account' : 'Sign In with Email'}
           </h2>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
+          <div className={`mb-4 p-3 rounded-xl text-sm ${
+            error.includes('Success!')
+              ? 'bg-green-50 text-green-600'
+              : 'bg-red-50 text-red-600'
+          }`}>
             {error}
           </div>
         )}
@@ -202,7 +316,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Password
-              </label>
+              </label> {isSignUp && <span className="text-sm text-gray-500 ml-1">(min. 6 characters)</span>}
               <input
                 type="password"
                 required
@@ -276,6 +390,62 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 Verify
               </button>
             </div>
+          </form>
+        )}
+
+        {step === 'profile' && (
+          <form onSubmit={handleProfileSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Username
+              </label>
+              <input
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                className="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-300 focus:border-transparent"
+                pattern="^[a-zA-Z0-9_]{3,30}$"
+                title="Username must be 3-30 characters and can only contain letters, numbers, and underscores"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                Letters, numbers, and underscores only (3-30 characters)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                First Name
+              </label>
+              <input
+                type="text"
+                required
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-300 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Last Name
+              </label>
+              <input
+                type="text"
+                required
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-300 focus:border-transparent"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full px-6 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50"
+            >
+              Complete Profile
+            </button>
           </form>
         )}
       </div>

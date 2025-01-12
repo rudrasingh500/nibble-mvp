@@ -27,13 +27,32 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false); // mobile dropdown
-  const [isMapPage, setIsMapPage] = useState(false); // mobile map page
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMapPage, setIsMapPage] = useState(false);
+  const [hasProfile, setHasProfile] = useState(true);
 
-  const dropdownRef = useRef<HTMLDivElement>(null); // Reference for the dropdown
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const checkUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      setHasProfile(!!data);
+      if (!data && !error) {
+        setIsAuthModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error checking profile:', error);
+      setHasProfile(false);
+      setIsAuthModalOpen(true);
+    }
+  };
 
   useEffect(() => {
-    // Close dropdown if clicking outside
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
@@ -48,13 +67,21 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user || null);
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+      if (currentUser) {
+        checkUserProfile(currentUser.id);
+      }
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+      if (currentUser) {
+        checkUserProfile(currentUser.id);
+      }
     });
 
     fetchVendors();
@@ -90,7 +117,6 @@ export default function App() {
       }));
       setVendors(transformedVendors);
 
-      // Update selected vendor if it exists
       if (selectedVendor) {
         const updatedVendor = transformedVendors.find(
           (v) => v.id === selectedVendor.id
@@ -109,6 +135,8 @@ export default function App() {
   const handleAddVendorClick = () => {
     if (!user) {
       setIsAuthModalOpen(true);
+    } else if (!hasProfile) {
+      setIsAuthModalOpen(true);
     } else {
       setIsAddModalOpen(true);
     }
@@ -125,7 +153,6 @@ export default function App() {
       vendor.cuisine.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Mobile "Map Page" view
   if (isMapPage) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
@@ -150,14 +177,12 @@ export default function App() {
     );
   }
 
-  // Show Profile page if user is logged in and requests it
   if (showProfile && user) {
     return <VendorProfile />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
-      {/* NAVBAR */}
       <header className="sticky top-0 z-40 backdrop-blur-lg bg-white/80 border-b border-white/20">
         <div className="max-w-7xl mx-auto py-4 px-6">
           <motion.div
@@ -165,7 +190,6 @@ export default function App() {
             animate={{ opacity: 1 }}
             className="flex items-center justify-between"
           >
-            {/* Logo Section */}
             <div className="flex items-center space-x-3">
               <MapPin className="w-6 h-6 text-orange-500 sm:w-8 sm:h-8" />
               <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-orange-600 sm:text-3xl">
@@ -173,12 +197,10 @@ export default function App() {
               </h1>
             </div>
 
-            {/* Search Bar Section (always visible, but scaled on larger screens) */}
             <div className="flex-1 max-w-full sm:max-w-2xl mx-4">
               <SearchBar value={searchTerm} onChange={setSearchTerm} />
             </div>
 
-            {/* MOBILE-ONLY DROPDOWN (Hamburger Menu) */}
             <div className="relative sm:hidden" ref={dropdownRef}>
               <button
                 onClick={() => setIsMenuOpen((prev) => !prev)}
@@ -240,7 +262,6 @@ export default function App() {
               )}
             </div>
 
-            {/* DESKTOP BUTTONS (hidden on mobile) */}
             <div className="hidden sm:flex items-center space-x-4">
               {!user ? (
                 <button
@@ -280,22 +301,18 @@ export default function App() {
         </div>
       </header>
 
-      {/* MAIN CONTENT */}
       <main className="max-w-7xl mx-auto py-8 px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column: Vendor List */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            {/* Title & MOBILE "View Map" Button */}
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-semibold text-gray-800">
                 {filteredVendors.length} Street Vendors Near You
               </h2>
 
-              {/* Mobile-only Map Button (moved here) */}
               <button
                 onClick={() => setIsMapPage(true)}
                 className="p-2 text-white bg-orange-500 rounded-full hover:bg-orange-600 transition-colors sm:hidden"
@@ -305,7 +322,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Vendor Cards */}
             <div className="space-y-6">
               {filteredVendors.map((vendor) => (
                 <VendorCard
@@ -317,14 +333,12 @@ export default function App() {
             </div>
           </motion.div>
 
-          {/* Right Column: Map (Desktop Only) */}
           <div className="hidden lg:block h-[calc(100vh-12rem)] sticky top-32">
             <Map vendors={vendors} selectedVendor={selectedVendor} />
           </div>
         </div>
       </main>
 
-      {/* MODALS */}
       <VendorModal
         vendor={selectedVendor}
         onClose={() => setSelectedVendor(null)}
