@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Plus, LogIn, LogOut, User, Menu } from 'lucide-react';
+import { MapPin, Plus, LogIn, LogOut, User, Map as MapIcon } from 'lucide-react';
 import { VendorCard } from './components/VendorCard';
 import { VendorModal } from './components/VendorModal';
 import { AddVendorModal } from './components/AddVendorModal';
@@ -19,7 +19,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMapPage, setIsMapPage] = useState(false); // Tracks whether we are on the map page (mobile view)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -42,7 +42,7 @@ export default function App() {
       .from('vendors')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (data) {
       const transformedVendors: Vendor[] = data.map(vendor => ({
         id: vendor.id,
@@ -62,7 +62,7 @@ export default function App() {
         menuItems: vendor.menu_items || []
       }));
       setVendors(transformedVendors);
-      
+
       // Update selected vendor if it exists
       if (selectedVendor) {
         const updatedVendor = transformedVendors.find(v => v.id === selectedVendor.id);
@@ -95,8 +95,29 @@ export default function App() {
     vendor.cuisine.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (showProfile && user) {
-    return <VendorProfile />;
+  if (isMapPage) {
+    // Mobile Map Page View
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
+        <header className="sticky top-0 z-40 backdrop-blur-lg bg-white/80 border-b border-white/20">
+          <div className="max-w-7xl mx-auto py-4 px-6 flex items-center justify-between">
+            <button
+              onClick={() => setIsMapPage(false)} // Navigate back to the main page
+              className="text-orange-600 hover:text-orange-700 flex items-center space-x-2"
+            >
+              <MapIcon className="w-5 h-5" />
+              <span>Back to Vendors</span>
+            </button>
+            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-orange-600">
+              nibble
+            </h1>
+          </div>
+        </header>
+        <main className="h-screen">
+          <Map vendors={vendors} selectedVendor={selectedVendor} />
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -117,73 +138,19 @@ export default function App() {
             </div>
 
             {/* Search Bar Section */}
-            <div className="flex-1 max-w-full sm:max-w-2xl mx-4">
+            <div className="flex items-center space-x-2 flex-1 max-w-full sm:max-w-2xl mx-4">
               <SearchBar value={searchTerm} onChange={setSearchTerm} />
-            </div>
-
-            {/* Hamburger Menu */}
-            <div className="relative sm:hidden">
+              {/* View Map Button */}
               <button
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="p-2 text-orange-500 hover:text-orange-700 transition-colors"
+                onClick={() => setIsMapPage(true)} // Navigate to Map Page
+                className="p-2 text-white bg-orange-500 rounded-full hover:bg-orange-600 transition-colors"
+                aria-label="View Map"
               >
-                <Menu className="w-6 h-6" />
+                <MapIcon className="w-5 h-5" />
               </button>
-              {isMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg ring-1 ring-black/10 focus:outline-none z-50">
-                  <ul className="py-2 text-gray-700">
-                    {!user ? (
-                      <li>
-                        <button
-                          onClick={() => {
-                            setIsAuthModalOpen(true);
-                            setIsMenuOpen(false);
-                          }}
-                          className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                        >
-                          Sign In
-                        </button>
-                      </li>
-                    ) : (
-                      <>
-                        <li>
-                          <button
-                            onClick={() => {
-                              setShowProfile(true);
-                              setIsMenuOpen(false);
-                            }}
-                            className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                          >
-                            My Profile
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            onClick={handleLogout}
-                            className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                          >
-                            Sign Out
-                          </button>
-                        </li>
-                      </>
-                    )}
-                    <li>
-                      <button
-                        onClick={() => {
-                          handleAddVendorClick();
-                          setIsMenuOpen(false);
-                        }}
-                        className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                      >
-                        Add Vendor
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-              )}
             </div>
 
-            {/* Buttons Section for Larger Screens */}
+            {/* Buttons Section */}
             <div className="hidden sm:flex items-center space-x-4">
               {!user ? (
                 <button
@@ -244,7 +211,7 @@ export default function App() {
             </div>
           </motion.div>
 
-          <div className="h-[calc(100vh-12rem)] sticky top-32">
+          <div className="hidden lg:block h-[calc(100vh-12rem)] sticky top-32">
             <Map vendors={vendors} selectedVendor={selectedVendor} />
           </div>
         </div>
