@@ -1,6 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Plus, LogIn, LogOut, User, Map as MapIcon } from 'lucide-react';
+import {
+  MapPin,
+  Plus,
+  LogIn,
+  LogOut,
+  User,
+  Menu,
+  Map as MapIcon,
+} from 'lucide-react';
 import { VendorCard } from './components/VendorCard';
 import { VendorModal } from './components/VendorModal';
 import { AddVendorModal } from './components/AddVendorModal';
@@ -19,14 +27,33 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [isMapPage, setIsMapPage] = useState(false); // Tracks whether we are on the map page (mobile view)
+  const [isMenuOpen, setIsMenuOpen] = useState(false); // mobile dropdown
+  const [isMapPage, setIsMapPage] = useState(false); // mobile map page
+
+  const dropdownRef = useRef<HTMLDivElement>(null); // Reference for the dropdown
+
+  useEffect(() => {
+    // Close dropdown if clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user || null);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
     });
 
@@ -44,7 +71,7 @@ export default function App() {
       .order('created_at', { ascending: false });
 
     if (data) {
-      const transformedVendors: Vendor[] = data.map(vendor => ({
+      const transformedVendors: Vendor[] = data.map((vendor) => ({
         id: vendor.id,
         name: vendor.name,
         description: vendor.description,
@@ -59,13 +86,15 @@ export default function App() {
         website: vendor.website || '',
         priceRange: vendor.price_range || 1,
         operatingHours: vendor.operating_hours || [],
-        menuItems: vendor.menu_items || []
+        menuItems: vendor.menu_items || [],
       }));
       setVendors(transformedVendors);
 
       // Update selected vendor if it exists
       if (selectedVendor) {
-        const updatedVendor = transformedVendors.find(v => v.id === selectedVendor.id);
+        const updatedVendor = transformedVendors.find(
+          (v) => v.id === selectedVendor.id
+        );
         if (updatedVendor) {
           setSelectedVendor(updatedVendor);
         }
@@ -90,19 +119,20 @@ export default function App() {
     window.location.reload();
   };
 
-  const filteredVendors = vendors.filter(vendor =>
-    vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    vendor.cuisine.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredVendors = vendors.filter(
+    (vendor) =>
+      vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      vendor.cuisine.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Mobile "Map Page" view
   if (isMapPage) {
-    // Mobile Map Page View
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
         <header className="sticky top-0 z-40 backdrop-blur-lg bg-white/80 border-b border-white/20">
           <div className="max-w-7xl mx-auto py-4 px-6 flex items-center justify-between">
             <button
-              onClick={() => setIsMapPage(false)} // Navigate back to the main page
+              onClick={() => setIsMapPage(false)}
               className="text-orange-600 hover:text-orange-700 flex items-center space-x-2"
             >
               <MapIcon className="w-5 h-5" />
@@ -120,8 +150,14 @@ export default function App() {
     );
   }
 
+  // Show Profile page if user is logged in and requests it
+  if (showProfile && user) {
+    return <VendorProfile />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
+      {/* NAVBAR */}
       <header className="sticky top-0 z-40 backdrop-blur-lg bg-white/80 border-b border-white/20">
         <div className="max-w-7xl mx-auto py-4 px-6">
           <motion.div
@@ -137,20 +173,74 @@ export default function App() {
               </h1>
             </div>
 
-            {/* Search Bar Section */}
-            <div className="flex items-center space-x-2 flex-1 max-w-full sm:max-w-2xl mx-4">
+            {/* Search Bar Section (always visible, but scaled on larger screens) */}
+            <div className="flex-1 max-w-full sm:max-w-2xl mx-4">
               <SearchBar value={searchTerm} onChange={setSearchTerm} />
-              {/* View Map Button */}
-              <button
-                onClick={() => setIsMapPage(true)} // Navigate to Map Page
-                className="p-2 text-white bg-orange-500 rounded-full hover:bg-orange-600 transition-colors"
-                aria-label="View Map"
-              >
-                <MapIcon className="w-5 h-5" />
-              </button>
             </div>
 
-            {/* Buttons Section */}
+            {/* MOBILE-ONLY DROPDOWN (Hamburger Menu) */}
+            <div className="relative sm:hidden" ref={dropdownRef}>
+              <button
+                onClick={() => setIsMenuOpen((prev) => !prev)}
+                className="p-2 text-orange-500 hover:text-orange-700 transition-colors"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+              {isMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg ring-1 ring-black/10 focus:outline-none z-50">
+                  <ul className="py-2 text-gray-700">
+                    {!user ? (
+                      <li>
+                        <button
+                          onClick={() => {
+                            setIsAuthModalOpen(true);
+                            setIsMenuOpen(false);
+                          }}
+                          className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                        >
+                          Sign In
+                        </button>
+                      </li>
+                    ) : (
+                      <>
+                        <li>
+                          <button
+                            onClick={() => {
+                              setShowProfile(true);
+                              setIsMenuOpen(false);
+                            }}
+                            className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                          >
+                            My Profile
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={handleLogout}
+                            className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                          >
+                            Sign Out
+                          </button>
+                        </li>
+                      </>
+                    )}
+                    <li>
+                      <button
+                        onClick={() => {
+                          handleAddVendorClick();
+                          setIsMenuOpen(false);
+                        }}
+                        className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                      >
+                        Add Vendor
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* DESKTOP BUTTONS (hidden on mobile) */}
             <div className="hidden sm:flex items-center space-x-4">
               {!user ? (
                 <button
@@ -190,16 +280,32 @@ export default function App() {
         </div>
       </header>
 
+      {/* MAIN CONTENT */}
       <main className="max-w-7xl mx-auto py-8 px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column: Vendor List */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            <h2 className="text-2xl font-semibold text-gray-800">
-              {filteredVendors.length} Street Vendors Near You
-            </h2>
+            {/* Title & MOBILE "View Map" Button */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-semibold text-gray-800">
+                {filteredVendors.length} Street Vendors Near You
+              </h2>
+
+              {/* Mobile-only Map Button (moved here) */}
+              <button
+                onClick={() => setIsMapPage(true)}
+                className="p-2 text-white bg-orange-500 rounded-full hover:bg-orange-600 transition-colors sm:hidden"
+                aria-label="View Map"
+              >
+                <MapIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Vendor Cards */}
             <div className="space-y-6">
               {filteredVendors.map((vendor) => (
                 <VendorCard
@@ -211,12 +317,14 @@ export default function App() {
             </div>
           </motion.div>
 
+          {/* Right Column: Map (Desktop Only) */}
           <div className="hidden lg:block h-[calc(100vh-12rem)] sticky top-32">
             <Map vendors={vendors} selectedVendor={selectedVendor} />
           </div>
         </div>
       </main>
 
+      {/* MODALS */}
       <VendorModal
         vendor={selectedVendor}
         onClose={() => setSelectedVendor(null)}
