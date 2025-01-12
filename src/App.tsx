@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Plus, LogIn, LogOut, User } from 'lucide-react';
+import { MapPin, Plus, LogIn, LogOut, User, Menu } from 'lucide-react';
 import { VendorCard } from './components/VendorCard';
 import { VendorModal } from './components/VendorModal';
 import { AddVendorModal } from './components/AddVendorModal';
@@ -19,6 +19,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -102,23 +103,88 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
       <header className="sticky top-0 z-40 backdrop-blur-lg bg-white/80 border-b border-white/20">
         <div className="max-w-7xl mx-auto py-4 px-6">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex items-center justify-between space-x-4"
+            className="flex items-center justify-between"
           >
+            {/* Logo Section */}
             <div className="flex items-center space-x-3">
-              <MapPin className="w-8 h-8 text-orange-500" />
-              <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-orange-600">
+              <MapPin className="w-6 h-6 text-orange-500 sm:w-8 sm:h-8" />
+              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-orange-600 sm:text-3xl">
                 nibble
               </h1>
             </div>
 
-            <div className="flex-1 max-w-2xl">
+            {/* Search Bar Section */}
+            <div className="flex-1 max-w-full sm:max-w-2xl mx-4">
               <SearchBar value={searchTerm} onChange={setSearchTerm} />
             </div>
 
-            <div className="flex items-center space-x-4">
+            {/* Hamburger Menu */}
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="p-2 text-orange-500 hover:text-orange-700 transition-colors"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+              {isMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg ring-1 ring-black/10 focus:outline-none z-50">
+                  <ul className="py-2 text-gray-700">
+                    {!user ? (
+                      <li>
+                        <button
+                          onClick={() => {
+                            setIsAuthModalOpen(true);
+                            setIsMenuOpen(false);
+                          }}
+                          className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                        >
+                          Sign In
+                        </button>
+                      </li>
+                    ) : (
+                      <>
+                        <li>
+                          <button
+                            onClick={() => {
+                              setShowProfile(true);
+                              setIsMenuOpen(false);
+                            }}
+                            className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                          >
+                            My Profile
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={handleLogout}
+                            className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                          >
+                            Sign Out
+                          </button>
+                        </li>
+                      </>
+                    )}
+                    <li>
+                      <button
+                        onClick={() => {
+                          handleAddVendorClick();
+                          setIsMenuOpen(false);
+                        }}
+                        className="block w-full px-4 py-2 text-left text-sm font-medium hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                      >
+                        Add Vendor
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Buttons Section for Larger Screens */}
+            <div className="hidden sm:flex items-center space-x-4">
               {!user ? (
                 <button
                   onClick={() => setIsAuthModalOpen(true)}
