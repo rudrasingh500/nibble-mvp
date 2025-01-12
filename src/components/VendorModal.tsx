@@ -18,7 +18,7 @@ interface Review {
   comment: string;
   created_at: string;
   updated_at: string;
-  user_email?: string;
+  username?: string;
 }
 
 export function VendorModal({ vendor, onClose, onReviewSubmitted }: VendorModalProps) {
@@ -69,10 +69,10 @@ export function VendorModal({ vendor, onClose, onReviewSubmitted }: VendorModalP
       const reviewsWithUsers = await Promise.all(
         (data || []).map(async (review) => {
           const { data: userData } = await supabase
-            .rpc('get_review_with_user_email', { target_review_id: review.id });
+            .from('profiles').select('username').eq('id', review.user_id).single();
           return {
             ...review,
-            user_email: userData?.[0]?.user_email
+            username: userData?.username || 'Anonymous'
           };
         })
       );
@@ -339,7 +339,7 @@ export function VendorModal({ vendor, onClose, onReviewSubmitted }: VendorModalP
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2">
                       <span className="font-medium text-gray-700">
-                        {review.user_email}
+                        @{review.username}
                       </span>
                       <div className="flex items-center text-yellow-400">
                         {[...Array(review.rating)].map((_, i) => (
