@@ -28,6 +28,7 @@ export function ReviewModal({
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('submitting review...');
     e.preventDefault();
     setError('');
 
@@ -50,6 +51,7 @@ export function ReviewModal({
           .from('reviews')
           .update({ rating, comment, updated_at: new Date().toISOString() })
           .eq('id', existingReview.id);
+          console.log('Updated review:', existingReview.id);
       } else {
         await supabase
           .from('reviews')
@@ -59,6 +61,28 @@ export function ReviewModal({
             rating,
             comment
           });
+          console.log('Inserted new review for vendor:', vendorId);
+      }
+
+      const { data: reviews, error: fetchError } = await supabase
+        .from('reviews')
+        .select('rating')
+        .eq('vendor_id', vendorId);
+      
+      if (fetchError) throw fetchError;
+      console.log('Fetched reviews:', reviews);
+
+      if (reviews) {
+        const totalRating = reviews.reduce((sum: number, review: any) => sum + review.rating, 0) || 0;
+        const averageRating = (totalRating / (reviews?.length || 1)).toFixed(1);
+        console.log('Calculated average rating:', averageRating);
+
+        const { error: updateError } = await supabase
+          .from('vendors')
+          .update({ rating: averageRating })
+          .eq('id', vendorId);
+        if (updateError) throw updateError;
+        console.log(`Vendor (${vendorId}) average rating updated successfully.`);
       }
 
       onReviewSubmitted();
